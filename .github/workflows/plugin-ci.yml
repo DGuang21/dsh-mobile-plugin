@@ -71,7 +71,8 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         shell: bash
         run: |
-          expected="v$(node -p \"require('./plugins/dsh-bridge/package.json').version\")"
+          plugin_version="$(node -p 'require("./plugins/dsh-bridge/package.json").version')"
+          expected="v${plugin_version}"
           test "$GITHUB_REF_NAME" = "$expected" || {
             echo "Release tag $GITHUB_REF_NAME does not match plugin version $expected"
             exit 1
