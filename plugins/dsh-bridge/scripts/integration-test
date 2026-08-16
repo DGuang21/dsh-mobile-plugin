@@ -75,6 +75,10 @@ fi
 command -v pnpm >/dev/null 2>&1 || skip "pnpm not on PATH — dsh plugin forwards to pnpm to install the bundle"
 command -v curl >/dev/null 2>&1 || skip "curl not on PATH — needed to probe the bridge's TLS listener"
 
+# The installable package loads dist/index.js. Build the exact standalone entry
+# that CI publishes before exercising dsh's real plugin installer.
+npm --prefix "$(cd -P "$PLUGIN_DIR/../.." && pwd)" run plugin:build
+
 say "# dsh plugin integration test"
 say "dsh:     ${DSH[*]}"
 say "plugin:  $PLUGIN_DIR"

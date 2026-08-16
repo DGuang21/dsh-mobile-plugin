@@ -16,6 +16,7 @@
     "bridge": "node --experimental-strip-types bridge/src/cli.ts",
     "relay": "node --experimental-strip-types bridge/src/relay/main.ts",
     "smoke:dsh": "node --experimental-strip-types bridge/scripts/smoke-real-dsh.ts",
+    "plugin:build": "npm --prefix plugins/dsh-bridge run build",
     "plugin:pack": "mkdir -p dist/plugin && npm pack ./plugins/dsh-bridge --json > dist/plugin/pack.json && node scripts/verify-plugin-pack.mjs dist/plugin/pack.json && mv \"$(node -e \"console.log(JSON.parse(require('fs').readFileSync('dist/plugin/pack.json', 'utf8'))[0].filename)\")\" dist/plugin/",
     "//smoke:dsh": "Runs the bridge's own dsh client against a REAL `dsh web`, not FakeDshServer. Needs a live server first; see docs/REAL_DSH_SMOKE.md. Exits 2 (skip) if unreachable, so it is deliberately NOT part of `verify`.",
     "verify": "npm run typecheck:all && npm run test && npm run bridge -- version",
@@ -45,6 +46,7 @@
   },
   "devDependencies": {
     "@types/react": "~18.3.12",
+    "esbuild": "^0.21.5",
     "typescript": "~5.3.3",
     "vitest": "^2.1.8"
   }

@@ -12,6 +12,20 @@ npx expo start
 
 The app starts in demo mode when no server URL is configured. Open Settings to connect a real gateway. The bridge defaults to the contract documented in [`docs/API_RESEARCH.md`](docs/API_RESEARCH.md), with configurable paths in `src/protocol/client.ts`.
 
+## Plugin releases
+
+The workstation plugin is built as a standalone Node 22 ESM bundle. Build and
+verify it locally with:
+
+```bash
+npm run plugin:pack
+```
+
+Pushing a `v*` tag whose version matches `plugins/dsh-bridge/package.json`
+triggers the full CI suite, builds the `.tgz`, and publishes it to the matching
+GitHub Release. The Release asset is the downloadable plugin package; the
+Actions artifact is retained only as a short-lived CI copy.
+
 ## Project layout
 
 - `src/protocol`: typed dsh-compatible HTTP/WebSocket bridge and event normalization.

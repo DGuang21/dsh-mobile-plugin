@@ -4,13 +4,17 @@
   "private": true,
   "description": "Serves a paired phone an authenticated, policy-gated view of a local dsh workstation. Runs inside dsh web as a Cordis plugin, or standalone through bridge/src/cli.ts.",
   "type": "module",
-  "main": "src/index.ts",
+  "main": "dist/index.js",
   "exports": {
-    ".": "./src/index.ts",
+    ".": "./dist/index.js",
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./package.json": "./package.json"
   },
-  "files": ["src", "panel-ui", "cordis.patch.yml", ".codex-plugin"],
+  "files": ["dist", "panel-ui", "cordis.patch.yml", ".codex-plugin"],
+  "scripts": {
+    "build": "esbuild src/index.ts --bundle --platform=node --format=esm --target=node22 --outfile=dist/index.js",
+    "prepack": "npm run build"
+  },
   "license": "MIT",
   "dsh": {
     "bundle": {

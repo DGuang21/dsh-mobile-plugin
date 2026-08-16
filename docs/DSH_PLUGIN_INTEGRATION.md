@@ -59,10 +59,9 @@ it. The path that actually runs is:
 
    A **local directory spec links, it does not copy.** pnpm records
    `@deepseek-ai/dsh-mobile-bridge: link:<abs path to plugins/dsh-bridge>` and
-   symlinks it into the profile's `node_modules`. This is load-bearing: the
-   plugin's `src/index.ts` imports `../../../bridge/src/bridge.ts`, which is
-   outside the package and excluded from its `files`. A copy would strand that
-   import; the symlink resolves it back to the real repo tree.
+   symlinks it into the profile's `node_modules`. The source checkout builds a
+   standalone `dist/index.js` before installation, so the same package also
+   works when downloaded from a Release rather than linked back to this repo.
 
 2. **On boot**, `loadProfile` (`packages/boot/app-boot/src/profile.ts`) resolves
    each bundle to its `cordis.patch.yml` and stacks the patches over an empty
@@ -72,8 +71,8 @@ it. The path that actually runs is:
 
 3. **The Cordis loader mounts the row.** The row's `name` is the package name;
    the loader dynamically `import()`s the package `main`. Our `main` is
-   `src/index.ts` — a `.ts` file — and **Node 22.22 strips types on import by
-   default**, so the loader mounts it with no build step. `apply(ctx, config)`
+   `dist/index.js` — the standalone bundle produced by `npm run plugin:build`.
+   `apply(ctx, config)`
    reads dsh's real bind through the injected `ctx.webServer`, dials it over
    loopback (normalizing `0.0.0.0`), and starts `buildBridge()` inside a
    `ctx.effect` whose disposer stops the bridge when dsh shuts down.

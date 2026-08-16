@@ -114,11 +114,12 @@ review.
 ## Runtime requirements
 
 Node 22 is a hard floor, not a preference. The bridge uses `node:crypto` for
-Ed25519, X25519, and AES-256-GCM, and runs its TypeScript entry point directly
-under `--experimental-strip-types`. There is no build step and there are zero
-runtime dependencies, which is why it can live in a tree shared with Expo.
+Ed25519, X25519, and AES-256-GCM. Release packages contain a standalone ESM
+bundle at `dist/index.js` and have zero runtime dependencies. From a source
+checkout, `npm run plugin:build` creates that entry before local installation;
+`npm run plugin:pack` builds, packages, and verifies it automatically.
 
-The entry point is the repo-root CLI, not a file in this directory:
+The standalone CLI entry point remains in the repo root:
 
 ```bash
 node --experimental-strip-types bridge/src/cli.ts start   # from the repo root
@@ -239,7 +240,7 @@ schema has nowhere to put it.
 A third manifest, `plugins/dsh-bridge/plugin.json`, was **deleted**. It described
 `src/protocol/client.ts` — the *phone's* HTTP/WebSocket client — as if that were
 the plugin. It is not: the plugin is the workstation half, entered through
-`src/index.ts`. The file was already inert, referenced by nothing but itself, and
+the bundled `dist/index.js`. The file was already inert, referenced by nothing but itself, and
 a manifest that mislabels which half of the system it describes is worse than no
 manifest.
 
@@ -263,7 +264,7 @@ server with the policy gate refusing a method that server would have answered. S
 Verified as a **plugin under a real `dsh web`** (`scripts/integration-test`, PASS
 against the same `47f9438`, on 2026-08-16): `dsh plugin add` links the package and
 reconciles `dsh.profile.bundles`, `cordis.patch.yml` composes the `mobile-bridge`
-row into the tree, the Cordis loader mounts `src/index.ts`, and the in-process
+row into the tree, the Cordis loader mounts the standalone `dist/index.js`, and the in-process
 bridge reaches `dshState: connected` on its own TLS listener. No source change was
 needed. See [docs/DSH_PLUGIN_INTEGRATION.md](../../docs/DSH_PLUGIN_INTEGRATION.md).
 

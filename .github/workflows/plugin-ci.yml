@@ -3,6 +3,7 @@ name: dsh mobile plugin CI
 on:
   push:
     branches: [main]
+    tags: ['v*']
     paths:
       - '.github/workflows/plugin-ci.yml'
       - 'bridge/**'
@@ -66,6 +67,15 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci
+      - name: Match release tag to plugin version
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          expected="v$(node -p \"require('./plugins/dsh-bridge/package.json').version\")"
+          test "$GITHUB_REF_NAME" = "$expected" || {
+            echo "Release tag $GITHUB_REF_NAME does not match plugin version $expected"
+            exit 1
+          }
       - name: Pack and verify plugin
         run: npm run plugin:pack
       - name: Upload plugin package
@@ -75,3 +85,32 @@ jobs:
           path: dist/plugin/*.tgz
           if-no-files-found: error
           retention-days: 14
+
+  release:
+    name: Publish GitHub Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [verify, plugin-package]
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    steps:
+      - name: Download plugin package
+        uses: actions/download-artifact@v4
+        with:
+          name: dsh-mobile-plugin
+          path: dist/plugin
+      - name: Create or update release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" dist/plugin/*.tgz \
+              --repo "$GITHUB_REPOSITORY" \
+              --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" dist/plugin/*.tgz \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "dsh mobile plugin $GITHUB_REF_NAME" \
+              --generate-notes
+          fi
