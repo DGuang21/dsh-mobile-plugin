@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="referrer" content="no-referrer" />
+    <meta name="color-scheme" content="light" />
+    <meta name="theme-color" content="#f7f8fa" />
+    <title>dsh mobile bridge</title>
+    <link rel="stylesheet" href="panel.css" />
+    %%DSH_MOBILE_BRIDGE_BOOTSTRAP%%
+  </head>
+  <body>
+    <div class="app-shell" id="app" aria-busy="true">
+      <header class="topbar">
+        <div class="topbar__inner">
+          <a class="brand" href="./" aria-label="dsh mobile bridge home">
+            <span class="brand__mark" aria-hidden="true"><span></span><span></span></span>
+            <span class="brand__name">dsh <strong>mobile bridge</strong></span>
+          </a>
+          <div class="topbar__actions">
+            <span class="connection-state" id="connection-state" data-state="loading">
+              <span class="status-dot" aria-hidden="true"></span>
+              <span id="connection-label">Connecting</span>
+            </span>
+            <button class="icon-button" id="refresh-all" type="button" aria-label="Refresh dashboard" title="Refresh dashboard">
+              <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M20 6v5h-5M4 18v-5h5M18.5 9A7 7 0 0 0 6.4 6.6L4 11m16 2-2.4 4.4A7 7 0 0 1 5.5 15"/></svg>
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <main class="workspace">
+        <section class="page-heading" aria-labelledby="page-title">
+          <div>
+            <p class="eyebrow">Local control surface</p>
+            <h1 id="page-title">Mobile bridge</h1>
+            <p class="identity" id="identity">Loading bridge identity...</p>
+          </div>
+          <button class="button button--primary" id="pair-hero-button" type="button">
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+            Pair device
+          </button>
+        </section>
+
+        <div id="error" class="notice notice--error" role="alert" hidden>
+          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 9v4m0 4h.01M10.3 4.2 2.7 17.4A2 2 0 0 0 4.4 20h15.2a2 2 0 0 0 1.7-2.6L13.7 4.2a2 2 0 0 0-3.4 0Z"/></svg>
+          <span id="error-message"></span>
+          <button class="notice__dismiss" id="error-dismiss" type="button" aria-label="Dismiss error">Close</button>
+        </div>
+
+        <section class="health-strip" id="status-section" aria-label="Bridge health">
+          <article class="health-item">
+            <span class="health-item__label">Bridge</span>
+            <span class="health-item__value"><span class="status-dot" id="bridge-dot" data-state="loading" aria-hidden="true"></span><strong id="bridge-health">Checking</strong></span>
+            <span class="health-item__detail" id="bridge-listen">--</span>
+          </article>
+          <article class="health-item">
+            <span class="health-item__label">dsh</span>
+            <span class="health-item__value"><span class="status-dot" id="dsh-dot" data-state="loading" aria-hidden="true"></span><strong id="dsh-health">Checking</strong></span>
+            <span class="health-item__detail" id="dsh-url">--</span>
+          </article>
+          <article class="health-item">
+            <span class="health-item__label">Relay</span>
+            <span class="health-item__value"><span class="status-dot" id="relay-dot" data-state="loading" aria-hidden="true"></span><strong id="relay-health">Checking</strong></span>
+            <span class="health-item__detail" id="relay-summary">--</span>
+          </article>
+          <article class="health-item">
+            <span class="health-item__label">Devices</span>
+            <span class="health-item__value"><strong id="device-health">--</strong></span>
+            <span class="health-item__detail" id="device-summary">Loading</span>
+          </article>
+        </section>
+
+        <section class="pair-workflow" id="pairing-section" aria-labelledby="pairing-title">
+          <div class="section-heading">
+            <div>
+              <p class="section-kicker">Secure enrollment</p>
+              <h2 id="pairing-title">Pair a device</h2>
+            </div>
+            <span class="phase-badge" id="pairing-badge" data-phase="idle">Ready</span>
+          </div>
+
+          <div id="pairing-idle" class="pairing-idle">
+            <form id="pair-form" class="pair-form">
+              <fieldset class="control-group">
+                <legend>Access tier</legend>
+                <div class="segmented-control">
+                  <label>
+                    <input type="radio" name="tier" value="default" checked />
+                    <span>Default</span>
+                  </label>
+                  <label>
+                    <input type="radio" name="tier" value="extended" />
+                    <span>Extended</span>
+                  </label>
+                </div>
+              </fieldset>
+              <label class="toggle-control">
+                <span>
+                  <strong>Pair through Relay</strong>
+                  <small id="relay-pair-hint">Requires a configured Relay</small>
+                </span>
+                <input type="checkbox" name="relay" id="pair-via-relay" />
+                <span class="toggle" aria-hidden="true"></span>
+              </label>
+              <button class="button button--primary pair-form__submit" id="pair-start" type="submit">
+                <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M3 5a2 2 0 0 1 2-2h4M15 3h4a2 2 0 0 1 2 2v4M21 15v4a2 2 0 0 1-2 2h-4M9 21H5a2 2 0 0 1-2-2v-4M8 8h3v3H8zm5 0h3v3h-3zm-5 5h3v3H8zm5 0h1m2 0v3h-3"/></svg>
+                Generate pairing code
+              </button>
+            </form>
+          </div>
+
+          <div id="pairing-state" class="pairing-live" hidden>
+            <div class="pairing-progress" aria-hidden="true">
+              <span id="pair-step-open" data-state="current">1</span><i></i><span id="pair-step-claimed">2</span><i></i><span id="pair-step-done">3</span>
+            </div>
+
+            <div id="pairing-open" class="pairing-stage" hidden>
+              <div class="qr-area">
+                <div class="qr-frame" id="qr-frame">
+                  <canvas id="pairing-canvas" width="248" height="248" aria-label="Device pairing QR code"></canvas>
+                  <div class="qr-loading" id="qr-loading"><span class="spinner"></span>Generating code</div>
+                </div>
+                <div class="pairing-copy">
+                  <p class="section-kicker">Scan with DeepSeek Harness Mobile</p>
+                  <h3 id="pairing-phase">Waiting for scan</h3>
+                  <p id="pairing-expiry">Pairing window is opening.</p>
+                  <dl class="pair-meta">
+                    <div><dt>Access</dt><dd id="pair-tier">Default</dd></div>
+                    <div><dt>Route</dt><dd id="pair-route">Local network</dd></div>
+                  </dl>
+                  <button class="button button--secondary" id="pairing-copy-uri" type="button" disabled>
+                    <svg aria-hidden="true" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M15 9V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h4"/></svg>
+                    Copy pairing link
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div id="pairing-sas" class="pairing-stage pairing-stage--sas" hidden>
+              <div class="sas-copy">
+                <p class="section-kicker">Identity check</p>
+                <h3>Do both screens match?</h3>
+                <p>Approve only when this code matches the code on the phone.</p>
+              </div>
+              <output class="sas-code" id="pairing-sas-code" aria-label="Pairing verification code"></output>
+              <p class="claiming-device" id="claiming-device"></p>
+              <div class="sas-actions">
+                <button class="button button--danger-subtle" id="pairing-decline" type="button">Reject</button>
+                <button class="button button--primary" id="pairing-accept" type="button">
+                  <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></svg>
+                  Codes match
+                </button>
+              </div>
+            </div>
+
+            <div id="pairing-result" class="pairing-stage pairing-stage--result" hidden>
+              <span class="result-icon" id="pairing-result-icon" data-result="done" aria-hidden="true"></span>
+              <div>
+                <p class="section-kicker" id="pairing-result-kicker">Device paired</p>
+                <h3 id="pairing-result-title">Pairing complete</h3>
+                <p id="pairing-result-detail"></p>
+              </div>
+              <button class="button button--secondary" id="pairing-reset" type="button">Pair another device</button>
+            </div>
+
+            <button class="text-button pairing-cancel" id="pairing-cancel" type="button">Cancel pairing</button>
+          </div>
+        </section>
+
+        <div class="content-grid">
+          <section class="panel-section devices-panel" id="devices-section" aria-labelledby="devices-title">
+            <div class="section-heading section-heading--compact">
+              <div>
+                <p class="section-kicker">Authorized clients</p>
+                <h2 id="devices-title">Devices <span class="count-badge" id="device-count">0</span></h2>
+              </div>
+            </div>
+            <div class="device-list" id="device-list" aria-live="polite">
+              <div class="empty-state" id="devices-empty" hidden>
+                <span class="empty-state__icon" aria-hidden="true">+</span>
+                <strong>No paired devices</strong>
+                <p>New devices will appear here after pairing.</p>
+              </div>
+            </div>
+          </section>
+
+          <aside class="side-column">
+            <section class="panel-section relay-panel" id="relay-section" aria-labelledby="relay-title">
+              <div class="section-heading section-heading--compact">
+                <div>
+                  <p class="section-kicker">Remote route</p>
+                  <h2 id="relay-title">Relay</h2>
+                </div>
+                <span class="small-state" id="relay-state-badge">Loading</span>
+              </div>
+              <div class="relay-values">
+                <div><span>Active</span><code id="relay-active">None</code></div>
+                <div><span>Configured</span><code id="relay-configured">None</code></div>
+              </div>
+              <div class="notice notice--warning" id="relay-restart" hidden>
+                <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M20 6v5h-5M4 18v-5h5M18.5 9A7 7 0 0 0 6.4 6.6L4 11m16 2-2.4 4.4A7 7 0 0 1 5.5 15"/></svg>
+                <span id="relay-notice-message">Restart the bridge to apply this change.</span>
+              </div>
+              <form id="relay-form" class="relay-form" novalidate>
+                <label for="relay-url">Relay WebSocket URL</label>
+                <input id="relay-url" type="url" name="url" autocomplete="off" spellcheck="false" placeholder="wss://relay.example/ws" />
+                <p class="field-error" id="relay-field-error" role="alert" hidden></p>
+                <div class="form-actions">
+                  <button class="button button--secondary" id="relay-clear" type="button">Clear</button>
+                  <button class="button button--primary" id="relay-save" type="submit">Save Relay</button>
+                </div>
+              </form>
+            </section>
+
+            <section class="panel-section identity-panel" aria-labelledby="identity-title">
+              <div class="section-heading section-heading--compact">
+                <div>
+                  <p class="section-kicker">Public identity</p>
+                  <h2 id="identity-title">Bridge keys</h2>
+                </div>
+              </div>
+              <dl class="key-list">
+                <div><dt>SPKI pin</dt><dd id="spki-pin">--</dd></div>
+                <div><dt>Bridge key</dt><dd id="bridge-key">--</dd></div>
+              </dl>
+            </section>
+          </aside>
+        </div>
+
+        <section class="panel-section audit-panel" id="audit-section" aria-labelledby="audit-title">
+          <div class="section-heading section-heading--compact">
+            <div>
+              <p class="section-kicker">Local audit trail</p>
+              <h2 id="audit-title">Recent activity</h2>
+            </div>
+            <span class="audit-count" id="audit-count">Last 25</span>
+          </div>
+          <ol class="audit-list" id="audit-list" aria-live="polite"></ol>
+          <div class="empty-state empty-state--compact" id="audit-empty" hidden>
+            <strong>No activity yet</strong>
+            <p>Bridge events will appear here.</p>
+          </div>
+        </section>
+      </main>
+
+      <footer class="footer">
+        <span>Local-only management panel</span>
+        <span id="footer-version">dsh mobile bridge</span>
+      </footer>
+    </div>
+
+    <dialog class="confirm-dialog" id="confirm-dialog">
+      <form method="dialog" class="confirm-dialog__surface">
+        <span class="confirm-dialog__icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2m-9 0 1 15h8l1-15M10 10v7m4-7v7"/></svg>
+        </span>
+        <div>
+          <p class="section-kicker">Remove access</p>
+          <h2 id="confirm-title">Revoke device?</h2>
+          <p id="confirm-description"></p>
+        </div>
+        <div class="confirm-dialog__actions">
+          <button class="button button--secondary" value="cancel">Cancel</button>
+          <button class="button button--danger" id="confirm-action" value="confirm">Revoke access</button>
+        </div>
+      </form>
+    </dialog>
+
+    <div class="toast-region" id="toast-region" aria-live="polite" aria-atomic="true"></div>
+
+    <script src="vendor/qrcode.js"></script>
+    <script type="module" src="panel.js"></script>
+  </body>
+</html>

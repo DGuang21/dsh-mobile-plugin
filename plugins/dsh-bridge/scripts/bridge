@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+#
+# dsh-bridge — thin launcher for the mobile bridge CLI.
+#
+# Exists so an operator does not have to remember `--experimental-strip-types` or
+# the path to cli.ts. Every argument is forwarded verbatim, so this wrapper can
+# never diverge from the CLI's own interface.
+#
+# Usage: bridge <start|pair|list|revoke|status|relay|paths|help|version> [args...]
+
+set -euo pipefail
+
+# Resolve this script's real location, so a symlink into ~/bin still works.
+SOURCE="${BASH_SOURCE[0]}"
+while [ -L "$SOURCE" ]; do
+  DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+  SOURCE="$(readlink "$SOURCE")"
+  [[ "$SOURCE" != /* ]] && SOURCE="$DIR/$SOURCE"
+done
+SCRIPT_DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+REPO_ROOT="$(cd -P "$SCRIPT_DIR/../../.." && pwd)"
+
+CLI="$REPO_ROOT/bridge/src/cli.ts"
+if [ ! -f "$CLI" ]; then
+  echo "dsh-bridge: cannot find $CLI" >&2
+  echo "dsh-bridge: this script must stay inside the repository tree." >&2
+  exit 1
+fi
+
+# Node 22 is a hard floor: the bridge needs --experimental-strip-types and the
+# node:crypto Ed25519/X25519 surface. Checked here rather than letting the
+# failure surface as a confusing syntax error.
+NODE_MAJOR="$(node -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0)"
+if [ "$NODE_MAJOR" -lt 22 ]; then
+  echo "dsh-bridge: Node 22 or newer is required (found $(node --version 2>/dev/null || echo 'no node'))." >&2
+  exit 1
+fi
+
+exec node --experimental-strip-types "$CLI" "$@"

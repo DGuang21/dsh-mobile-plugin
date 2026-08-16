@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+#
+# Install the bridge into a dsh profile as a plugin layer.
+#
+# This runs `dsh plugin add` with a path spec. `dsh plugin` is a pnpm forwarder:
+# it installs into the profile directory, then reconciles `dsh.profile.bundles`
+# against the installed state, activating any dependency whose package.json
+# declares `dsh.bundle` — which ours does, pointing at cordis.patch.yml.
+#
+# INTEGRATION-TESTED. The command shape and the activation rule were read from
+# the upstream source (apps/cli/src/plugin.ts) and then confirmed end to end
+# against a real `dsh web` at upstream 47f9438 on 2026-08-16. This script is the
+# human-facing wrapper (it prompts); the automated, hermetic version of the same
+# path is plugins/dsh-bridge/scripts/integration-test. Treat the output, not this
+# script, as truth.
+#
+# Usage: install-into-profile [profile]     (default profile: web)
+
+set -euo pipefail
+
+PROFILE="${1:-web}"
+
+SCRIPT_DIR="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PLUGIN_DIR="$(cd -P "$SCRIPT_DIR/.." && pwd)"
+
+if ! command -v dsh >/dev/null 2>&1; then
+  echo "install-into-profile: no \`dsh\` on PATH." >&2
+  echo "install-into-profile: install the harness first, or run the bridge standalone:" >&2
+  echo "    $SCRIPT_DIR/bridge start --host 0.0.0.0" >&2
+  exit 1
+fi
+
+echo "Installing $PLUGIN_DIR into the '$PROFILE' profile..."
+echo
+echo "This will:"
+echo "  1. pnpm-install this package into the profile directory"
+echo "  2. append @deepseek-ai/dsh-mobile-bridge to dsh.profile.bundles"
+echo "  3. apply cordis.patch.yml as a layer on the next \`dsh --profile $PROFILE\` boot"
+echo
+echo "It does NOT change your webserver host or port. The bridge listens on its"
+echo "own port with its own TLS identity, and reads dsh's bind through ctx.webServer."
+echo
+read -r -p "Proceed? [y/N] " reply
+case "$reply" in
+  [yY]*) ;;
+  *) echo "Aborted."; exit 1 ;;
+esac
+
+dsh plugin --profile "$PROFILE" add "$PLUGIN_DIR"
+
+echo
+echo "Installed. Verify the composition before booting:"
+echo "    dsh --profile $PROFILE dump-config | grep -A 8 mobile-bridge"
+echo
+echo "Then start dsh, and pair a phone from a second terminal:"
+echo "    dsh --profile $PROFILE"
+echo "    $SCRIPT_DIR/bridge pair"

@@ -1,0 +1,51 @@
+{
+  "name": "deepseek-harness-mobile",
+  "version": "0.1.0",
+  "private": true,
+  "main": "expo-router/entry",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "web": "expo start --web",
+    "typecheck": "tsc --noEmit",
+    "typecheck:bridge": "tsc -p bridge/tsconfig.json --noEmit",
+    "typecheck:all": "npm run typecheck && npm run typecheck:bridge",
+    "test": "vitest run",
+    "test:bridge": "vitest run bridge/tests",
+    "bridge": "node --experimental-strip-types bridge/src/cli.ts",
+    "relay": "node --experimental-strip-types bridge/src/relay/main.ts",
+    "smoke:dsh": "node --experimental-strip-types bridge/scripts/smoke-real-dsh.ts",
+    "plugin:pack": "mkdir -p dist/plugin && npm pack ./plugins/dsh-bridge --json > dist/plugin/pack.json && node scripts/verify-plugin-pack.mjs dist/plugin/pack.json && mv \"$(node -e \"console.log(JSON.parse(require('fs').readFileSync('dist/plugin/pack.json', 'utf8'))[0].filename)\")\" dist/plugin/",
+    "//smoke:dsh": "Runs the bridge's own dsh client against a REAL `dsh web`, not FakeDshServer. Needs a live server first; see docs/REAL_DSH_SMOKE.md. Exits 2 (skip) if unreachable, so it is deliberately NOT part of `verify`.",
+    "verify": "npm run typecheck:all && npm run test && npm run bridge -- version",
+    "//verify": "The trailing `bridge version` is not redundant: vitest transpiles TypeScript, so it cannot catch syntax that `node --experimental-strip-types` rejects (parameter properties, enums, namespaces, decorators). Running the real entry point is the only check that the shipped CLI still starts."
+  },
+  "dependencies": {
+    "@expo/vector-icons": "^14.0.4",
+    "@noble/ciphers": "^1.3.0",
+    "@noble/curves": "^1.9.7",
+    "@noble/ed25519": "^2.3.0",
+    "@noble/hashes": "^1.8.0",
+    "@react-native-async-storage/async-storage": "^2.1.2",
+    "expo": "~52.0.0",
+    "expo-asset": "~11.0.5",
+    "expo-camera": "~16.0.18",
+    "expo-constants": "~17.0.3",
+    "expo-crypto": "~14.0.2",
+    "expo-router": "~4.0.17",
+    "expo-secure-store": "~14.0.1",
+    "expo-status-bar": "~2.0.1",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "react-native": "0.76.7",
+    "react-native-safe-area-context": "4.12.0",
+    "react-native-screens": "~4.4.0",
+    "react-native-web": "~0.19.13"
+  },
+  "devDependencies": {
+    "@types/react": "~18.3.12",
+    "typescript": "~5.3.3",
+    "vitest": "^2.1.8"
+  }
+}

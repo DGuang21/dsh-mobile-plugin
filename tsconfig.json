@@ -1,0 +1,11 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "baseUrl": ".",
+    "paths": { "@/*": ["./src/*"] }
+  },
+  "//": "bridge/ is Node-side and has its own tsconfig (see bridge/tsconfig.json). It is excluded here so Node globals never leak into the React Native build; run `npm run typecheck:bridge` for it. plugins/ is excluded for the same reason: plugins/dsh-bridge/src imports the bridge and runs inside dsh, never in Metro.",
+  "exclude": ["node_modules", "bridge", "plugins", "dist"]
+}

@@ -1,0 +1,77 @@
+name: dsh mobile plugin CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/plugin-ci.yml'
+      - 'bridge/**'
+      - 'plugins/dsh-bridge/**'
+      - 'scripts/verify-plugin-pack.mjs'
+      - 'app/**'
+      - 'src/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'tsconfig.json'
+  pull_request:
+    paths:
+      - '.github/workflows/plugin-ci.yml'
+      - 'bridge/**'
+      - 'plugins/dsh-bridge/**'
+      - 'scripts/verify-plugin-pack.mjs'
+      - 'app/**'
+      - 'src/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'tsconfig.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Typecheck and test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Typecheck all packages
+        run: npm run typecheck:all
+      - name: Run test suite
+        run: npm test
+      - name: Check bridge CLI entry point
+        run: npm run bridge -- version
+
+  plugin-package:
+    name: Build and verify plugin package
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: verify
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Pack and verify plugin
+        run: npm run plugin:pack
+      - name: Upload plugin package
+        uses: actions/upload-artifact@v4
+        with:
+          name: dsh-mobile-plugin
+          path: dist/plugin/*.tgz
+          if-no-files-found: error
+          retention-days: 14

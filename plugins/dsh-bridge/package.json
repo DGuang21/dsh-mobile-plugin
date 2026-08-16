@@ -1,0 +1,31 @@
+{
+  "name": "@deepseek-ai/dsh-mobile-bridge",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Serves a paired phone an authenticated, policy-gated view of a local dsh workstation. Runs inside dsh web as a Cordis plugin, or standalone through bridge/src/cli.ts.",
+  "type": "module",
+  "main": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": ["src", "panel-ui", "cordis.patch.yml", ".codex-plugin"],
+  "license": "MIT",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "*"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/cordis": {
+      "optional": true
+    }
+  }
+}

@@ -1,0 +1,266 @@
+#!/usr/bin/env bash
+#
+# Isolated, reproducible integration test for the dsh plugin PATH.
+#
+# Everything else that proves the bridge — bridge/tests, and bridge/scripts/
+# smoke-real-dsh.ts — stands the bridge up itself. This script proves the ONE
+# thing they cannot: that a real `dsh web` LOADS this package as a plugin. It
+# runs the actual upstream mechanism end to end and asserts on what came back:
+#
+#   1. `dsh plugin --profile <p> add <plugin-dir>`  — the real installer, which
+#      forwards to pnpm and reconciles dsh.profile.bundles (apps/cli/src/plugin.ts).
+#   2. `dsh --profile <p> --dump-config`            — assert the mobile-bridge row
+#      composed into the tree from the bundle's cordis.patch.yml.
+#   3. boot `dsh web`, then `GET /m1/health` over the bridge's own TLS listener —
+#      assert dshState: connected, i.e. the in-process bridge connected back to
+#      its host dsh's /api. That is the load-and-start observation.
+#   4. probe the management panel on dsh's OWN webserver (same-origin) — assert the
+#      UI is served with the injected bootstrap token at <dsh>/mobile-bridge/, that
+#      /api is 401 without the token, and /api answers ok:true with the token the
+#      plugin wrote to the state dir. Loopback-bound dsh exposes `webServer.register`,
+#      so the plugin rides dsh's listener (the supported client-injection path)
+#      rather than opening its own; we also assert the dedicated PANEL_PORT is NOT
+#      bound, proving that branch was taken. That is the "dsh web loads the panel
+#      assets" observation, via the real upstream contract.
+#   5. drive a REAL mutation: PUT /mobile-bridge/api/relay with a JSON body over
+#      dsh's own listener, token-gated, then GET it back and confirm it persisted to
+#      the on-disk identity. This run leaves DSH_MOBILE_BRIDGE_RELAY unset, so the
+#      relay is panel-owned (not pinned) and the write must take effect.
+#
+# It is hermetic: a throwaway $DSH_HOME, a throwaway bridge state dir, and free
+# ephemeral ports, all removed on exit. It never touches your real dsh state.
+#
+# Exit codes match smoke:dsh so it can gate the same way:
+#   0  every assertion passed — the plugin loaded and the bridge connected.
+#   1  an assertion failed — a real incompatibility. The blocker is printed.
+#   2  skip — no runnable dsh, or the upstream tree is not built. Not a failure.
+#
+# Finding dsh (first hit wins):
+#   $DSH_BIN         absolute path to a `dsh` executable or its bin.js
+#   $DSH_UPSTREAM    upstream checkout root; uses <root>/apps/cli/lib/bin.js
+#   `dsh` on PATH
+#   the documented upstream tree (see docs/DSH_PLUGIN_INTEGRATION.md)
+
+set -euo pipefail
+
+PROFILE="${DSH_INT_PROFILE:-web}"
+SCRIPT_DIR="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PLUGIN_DIR="$(cd -P "$SCRIPT_DIR/.." && pwd)"
+DEFAULT_UPSTREAM="/private/tmp/deepseek-harness-upstream.uJWWHk"
+
+say()  { printf '%s\n' "$*"; }
+skip() { printf 'SKIP: %s\n' "$*" >&2; exit 2; }
+fail() { printf 'FAIL: %s\n' "$*" >&2; exit 1; }
+
+# --- resolve a runnable dsh command into the array DSH[] ---------------------
+DSH=()
+if [ -n "${DSH_BIN:-}" ]; then
+  [ -x "$DSH_BIN" ] || [ -f "$DSH_BIN" ] || skip "DSH_BIN=$DSH_BIN is not a file"
+  case "$DSH_BIN" in
+    *.js) DSH=(node "$DSH_BIN") ;;
+    *)    DSH=("$DSH_BIN") ;;
+  esac
+elif [ -n "${DSH_UPSTREAM:-}" ]; then
+  BIN="$DSH_UPSTREAM/apps/cli/lib/bin.js"
+  [ -f "$BIN" ] || skip "no built CLI at $BIN — build the upstream tree (see docs/DSH_PLUGIN_INTEGRATION.md)"
+  DSH=(node "$BIN")
+elif command -v dsh >/dev/null 2>&1; then
+  DSH=(dsh)
+elif [ -f "$DEFAULT_UPSTREAM/apps/cli/lib/bin.js" ]; then
+  DSH=(node "$DEFAULT_UPSTREAM/apps/cli/lib/bin.js")
+else
+  skip "no dsh found. Set DSH_BIN, or DSH_UPSTREAM to a built checkout, or put dsh on PATH."
+fi
+
+command -v pnpm >/dev/null 2>&1 || skip "pnpm not on PATH — dsh plugin forwards to pnpm to install the bundle"
+command -v curl >/dev/null 2>&1 || skip "curl not on PATH — needed to probe the bridge's TLS listener"
+
+say "# dsh plugin integration test"
+say "dsh:     ${DSH[*]}"
+say "plugin:  $PLUGIN_DIR"
+say "profile: $PROFILE"
+say
+
+# --- hermetic workspace ------------------------------------------------------
+WORK="$(mktemp -d "${TMPDIR:-/tmp}/dsh-plugin-int.XXXXXX")"
+export DSH_HOME="$WORK/home"
+export DSH_MOBILE_BRIDGE_STATE_DIR="$WORK/bridge-state"
+mkdir -p "$DSH_HOME"
+
+# free ephemeral ports for dsh web and the bridge, bound-then-released.
+free_port() { node -e 'const s=require("net").createServer();s.listen(0,"127.0.0.1",()=>{const p=s.address().port;s.close(()=>console.log(p))})'; }
+DSH_PORT="$(free_port)"
+BRIDGE_PORT="$(free_port)"
+PANEL_PORT="$(free_port)"
+export DSH_MOBILE_BRIDGE_HOST="127.0.0.1"
+export DSH_MOBILE_BRIDGE_PORT="$BRIDGE_PORT"
+export DSH_MOBILE_BRIDGE_PANEL_PORT="$PANEL_PORT"
+
+WEB_PID=""
+cleanup() {
+  [ -n "$WEB_PID" ] && kill "$WEB_PID" 2>/dev/null || true
+  [ -n "$WEB_PID" ] && wait "$WEB_PID" 2>/dev/null || true
+  rm -rf "$WORK"
+}
+trap cleanup EXIT INT TERM
+
+WEB_LOG="$WORK/web.log"
+
+# --- 1. install the plugin via the real mechanism ----------------------------
+say "1. dsh plugin --profile $PROFILE add $PLUGIN_DIR"
+if ! "${DSH[@]}" plugin --profile "$PROFILE" add "$PLUGIN_DIR" > "$WORK/add.log" 2>&1; then
+  cat "$WORK/add.log" >&2
+  fail "dsh plugin add failed — see output above"
+fi
+grep -q 'dsh-mobile-bridge' "$WORK/add.log" || { cat "$WORK/add.log" >&2; fail "add did not report the bundle"; }
+say "   ok — pnpm linked the package into the profile"
+
+# --- 2. assert the patch composed into the tree ------------------------------
+say "2. dsh --profile $PROFILE --dump-config | grep mobile-bridge"
+if ! "${DSH[@]}" --profile "$PROFILE" --dump-config > "$WORK/dump.log" 2>&1; then
+  cat "$WORK/dump.log" >&2
+  fail "dump-config failed — the composed tree did not build"
+fi
+grep -q 'id: mobile-bridge' "$WORK/dump.log" \
+  || fail "mobile-bridge row absent from the composed config — the bundle patch did not apply"
+say "   ok — the mobile-bridge row is in the composed profile tree"
+
+# --- 3. boot dsh web and observe the bridge load + connect -------------------
+say "3. boot dsh web (:$DSH_PORT), then GET /m1/health on the bridge (:$BRIDGE_PORT)"
+"${DSH[@]}" web --host 127.0.0.1 --port "$DSH_PORT" > "$WEB_LOG" 2>&1 &
+WEB_PID=$!
+
+# 3a. wait for dsh's own /api to answer, so "bridge could not connect" cannot be
+#     confused with "dsh was not up yet".
+DEADLINE=$(( $(date +%s) + 40 ))
+until curl -s -m 3 -X POST "http://127.0.0.1:$DSH_PORT/api/host.describe" \
+        -H 'content-type: application/json' \
+        -d '{"type":"client-request","rpcId":"int","method":"host.describe","payload":{}}' \
+        2>/dev/null | grep -q '"ok":true'; do
+  if ! kill -0 "$WEB_PID" 2>/dev/null; then cat "$WEB_LOG" >&2; fail "dsh web exited during boot"; fi
+  [ "$(date +%s)" -ge "$DEADLINE" ] && { cat "$WEB_LOG" >&2; fail "dsh web never served /api within 40s"; }
+  sleep 1
+done
+say "   ok — dsh web is serving /api on :$DSH_PORT"
+
+# 3b. the payoff: the bridge the plugin started, on its own TLS listener,
+#     reporting the host dsh as connected. -k because the cert is self-signed
+#     by design (the phone pins its SPKI from the QR).
+HEALTH=""
+DEADLINE=$(( $(date +%s) + 25 ))
+until printf '%s' "$HEALTH" | grep -q '"dshState":"connected"'; do
+  HEALTH="$(curl -sk -m 3 "https://127.0.0.1:$BRIDGE_PORT/m1/health" 2>/dev/null || true)"
+  if printf '%s' "$HEALTH" | grep -q '"dshState":"connected"'; then break; fi
+  if ! kill -0 "$WEB_PID" 2>/dev/null; then cat "$WEB_LOG" >&2; fail "dsh web exited before the bridge connected"; fi
+  if [ "$(date +%s)" -ge "$DEADLINE" ]; then
+    say "last /m1/health: ${HEALTH:-<no response — bridge never listened>}"
+    grep -iE 'bridge|mobile|error|fail' "$WEB_LOG" >&2 || true
+    fail "the bridge did not reach dshState: connected — the plugin did not load/start, or could not reach dsh"
+  fi
+  sleep 1
+done
+
+say
+say "PASS — the plugin loaded under a real dsh web and the bridge connected."
+say "evidence (GET https://127.0.0.1:$BRIDGE_PORT/m1/health):"
+say "  $HEALTH"
+
+# --- 4. observe the management panel the plugin mounted (same-origin on dsh) -----
+# The panel is the OTHER half of "the plugin runs under dsh web": a loopback-only,
+# token-gated operator surface. Because this dsh is loopback-bound and exposes
+# `webServer.register`, the plugin mounts the panel SAME-ORIGIN on dsh's own
+# listener at <dsh>/mobile-bridge/ (the supported client-injection contract), and
+# does NOT open the dedicated PANEL_PORT listener. We prove four things end to end:
+#   a. the UI is served by dsh itself and carries the injected bootstrap token;
+#   b. its /api is refused (401) with no token — the fence is closed by default;
+#   c. its /api answers (200) with the token the plugin wrote to the state dir;
+#   d. the dedicated PANEL_PORT is NOT bound — confirming the same-origin branch.
+say
+say "4. management panel SAME-ORIGIN at http://127.0.0.1:$DSH_PORT/mobile-bridge/ (loopback, token-gated)"
+
+TOKEN_FILE="$DSH_MOBILE_BRIDGE_STATE_DIR/panel-token"
+DEADLINE=$(( $(date +%s) + 15 ))
+until [ -s "$TOKEN_FILE" ]; do
+  if ! kill -0 "$WEB_PID" 2>/dev/null; then cat "$WEB_LOG" >&2; fail "dsh web exited before the panel wrote its token"; fi
+  [ "$(date +%s)" -ge "$DEADLINE" ] && { grep -iE 'panel|bridge|error|fail' "$WEB_LOG" >&2 || true; fail "panel token file never appeared at $TOKEN_FILE"; }
+  sleep 1
+done
+PANEL_TOKEN="$(tr -d '[:space:]' < "$TOKEN_FILE")"
+[ -n "$PANEL_TOKEN" ] || fail "panel token file was empty"
+
+# 4a. UI served by dsh itself with the bootstrap injected.
+INDEX=""
+DEADLINE=$(( $(date +%s) + 15 ))
+until printf '%s' "$INDEX" | grep -q '__DSH_MOBILE_BRIDGE__'; do
+  INDEX="$(curl -s -m 3 -H 'Host: 127.0.0.1' "http://127.0.0.1:$DSH_PORT/mobile-bridge/" 2>/dev/null || true)"
+  if printf '%s' "$INDEX" | grep -q '__DSH_MOBILE_BRIDGE__'; then break; fi
+  if ! kill -0 "$WEB_PID" 2>/dev/null; then cat "$WEB_LOG" >&2; fail "dsh web exited before the panel served its UI"; fi
+  [ "$(date +%s)" -ge "$DEADLINE" ] && { grep -iE 'panel|bridge|error|fail' "$WEB_LOG" >&2 || true; fail "panel UI never served the bootstrap at dsh :$DSH_PORT/mobile-bridge/"; }
+  sleep 1
+done
+printf '%s' "$INDEX" | grep -q "$PANEL_TOKEN" || fail "panel UI did not carry the injected token"
+say "   ok — UI served by dsh's own webserver with the bootstrap token injected"
+
+# 4b. /api refused without the token.
+STATUS_NOAUTH="$(curl -s -o /dev/null -w '%{http_code}' -m 3 -H 'Host: 127.0.0.1' "http://127.0.0.1:$DSH_PORT/mobile-bridge/api/status" 2>/dev/null || true)"
+[ "$STATUS_NOAUTH" = "401" ] || fail "panel /api/status returned $STATUS_NOAUTH without a token; expected 401 (fence not closed)"
+say "   ok — /api refused (401) without the bearer token"
+
+# 4c. /api answers with the token.
+STATUS_AUTH="$(curl -s -m 3 -H 'Host: 127.0.0.1' -H "Authorization: Bearer $PANEL_TOKEN" "http://127.0.0.1:$DSH_PORT/mobile-bridge/api/status" 2>/dev/null || true)"
+printf '%s' "$STATUS_AUTH" | grep -q '"ok":true' || fail "panel /api/status did not answer ok:true with the token; got: ${STATUS_AUTH:-<empty>}"
+say "   ok — /api answers (200, ok:true) with the token, served by dsh"
+
+# 4d. the dedicated PANEL_PORT listener is NOT up — the plugin chose same-origin.
+if curl -s -o /dev/null -m 2 -H 'Host: 127.0.0.1' "http://127.0.0.1:$PANEL_PORT/mobile-bridge/" 2>/dev/null; then
+  fail "a dedicated listener answered on :$PANEL_PORT — expected same-origin mount only (loopback dsh)"
+fi
+say "   ok — no dedicated listener on :$PANEL_PORT; the panel is same-origin on dsh"
+
+say
+say "PANEL PASS — the panel loaded same-origin under real dsh web via webServer.register,"
+say "served its UI, enforced its token fence, and did not open a second listener."
+
+# --- 5. drive a REAL same-origin mutation through the panel API ---------------
+# Steps 1-4 prove the panel loads, serves, and reads. This proves a WRITE lands:
+# a PUT /relay with a JSON body, token-gated, on dsh's own listener, then a GET
+# that reads the value back. DSH_MOBILE_BRIDGE_RELAY is unset in this hermetic run,
+# so the relay is NOT pinned and the panel owns it — the mutation must take. (The
+# value is a wss URL the bridge never dials: no paired devices, so no connector.)
+say
+say "5. same-origin mutation: PUT /mobile-bridge/api/relay, then read it back"
+
+RELAY_URL="wss://integration.example/relay/v1"
+PUT_BODY="$(printf '{"url":"%s"}' "$RELAY_URL")"
+PUT_STATUS="$(curl -s -o "$WORK/put.json" -w '%{http_code}' -m 3 \
+  -X PUT \
+  -H 'Host: 127.0.0.1' \
+  -H "Authorization: Bearer $PANEL_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d "$PUT_BODY" \
+  "http://127.0.0.1:$DSH_PORT/mobile-bridge/api/relay" 2>/dev/null || true)"
+[ "$PUT_STATUS" = "200" ] || { cat "$WORK/put.json" >&2 2>/dev/null || true; fail "PUT /relay returned $PUT_STATUS; expected 200"; }
+grep -q '"ok":true' "$WORK/put.json" || { cat "$WORK/put.json" >&2; fail "PUT /relay did not answer ok:true"; }
+grep -q '"restartRequired":true' "$WORK/put.json" || { cat "$WORK/put.json" >&2; fail "PUT /relay did not report restartRequired:true"; }
+say "   ok — PUT /relay accepted the value (persisted; restart-required as documented)"
+
+# 5b. read it back through GET /relay — the write is observable, not just echoed.
+GET_RELAY="$(curl -s -m 3 -H 'Host: 127.0.0.1' -H "Authorization: Bearer $PANEL_TOKEN" \
+  "http://127.0.0.1:$DSH_PORT/mobile-bridge/api/relay" 2>/dev/null || true)"
+printf '%s' "$GET_RELAY" | grep -q "\"configured\":\"$RELAY_URL\"" \
+  || fail "GET /relay did not reflect the PUT value; got: ${GET_RELAY:-<empty>}"
+# Not pinned in this run, so the panel is authoritative and reports it editable.
+printf '%s' "$GET_RELAY" | grep -q '"pinned":false' \
+  || fail "GET /relay should report pinned:false (no config/env/CLI pin in this run)"
+say "   ok — GET /relay reflects the mutation and reports the relay panel-editable"
+
+# 5c. persisted to disk too — the same value survives in the identity file.
+IDENTITY_FILE="$DSH_MOBILE_BRIDGE_STATE_DIR/identity.json"
+[ -s "$IDENTITY_FILE" ] || fail "identity file missing at $IDENTITY_FILE"
+grep -q "$RELAY_URL" "$IDENTITY_FILE" || fail "the relay value was not persisted to the identity file"
+say "   ok — the mutation persisted to the on-disk identity"
+
+say
+say "MUTATION PASS — a token-gated same-origin PUT /relay wrote through dsh's own"
+say "listener, read back, and persisted to disk."
+exit 0

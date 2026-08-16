@@ -1,0 +1,41 @@
+{
+  "id": "dsh-bridge",
+  "name": "dsh-bridge",
+  "version": "0.1.0",
+  "description": "Serves a paired phone a policy-gated, authenticated view of a local dsh workstation over pinned TLS on the LAN, or through an untrusted relay.",
+  "license": "MIT",
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "mobile",
+    "bridge",
+    "pairing",
+    "relay"
+  ],
+  "author": {
+    "name": "deepseek-harness-mobile maintainers"
+  },
+  "interface": {
+    "displayName": "dsh Mobile Bridge",
+    "shortDescription": "Authenticated phone access to a dsh workstation",
+    "longDescription": "A workstation-side bridge that lets a paired phone drive a local dsh install without exposing dsh's unauthenticated /api. It terminates the phone's TLS connection, authenticates the device against an Ed25519 key established by an operator-confirmed pairing, applies a method deny list and scope tier, and only then forwards. Works on the LAN with a pinned self-signed certificate, or through a relay that is treated as hostile and never holds a key. Every pairing, auth, RPC, and approval decision is audited. Runtime requirements, CLI commands, configuration, the security model, and the dsh profile-bundle install path are documented in README.md.",
+    "developerName": "deepseek-harness-mobile maintainers",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write",
+      "dsh-rpc-forwarding",
+      "dsh-event-streaming",
+      "tool-approvals",
+      "user-questions",
+      "device-pairing",
+      "relay-tunnel"
+    ],
+    "defaultPrompt": [
+      "Start the bridge and pair my phone.",
+      "Show paired devices and the dsh link state.",
+      "Revoke a device that lost its phone."
+    ]
+  }
+}

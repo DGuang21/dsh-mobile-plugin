@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "types": ["node"],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": false,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true
+  },
+  "//": "../src/m1/types.ts is declaration-only and is shared with the RN app via `import type`. Its sibling paths.ts is the app's runtime mirror of src/m1/wire.ts and is NOT included here: it is authored as ESM for Metro, while this project resolves ../src as CommonJS (the root package.json has no `type`). tests/m1-contract.test.ts checks the two mirrors agree.",
+  "//2": "The dsh plugin entry point is checked here rather than in the app's project because it imports the bridge and runs on Node, not in Metro. It declares its own minimal Cordis Context: @deepseek-ai/cordis is deliberately not a dependency of this repo.",
+  "include": ["src/**/*.ts", "tests/**/*.ts", "../src/m1/types.ts", "../plugins/dsh-bridge/src/**/*.ts"]
+}

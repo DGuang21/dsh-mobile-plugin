@@ -1,0 +1,47 @@
+# dsh mobile bridge — profile patch overlay.
+#
+# Installed by `dsh plugin add`, which appends this package to the profile's
+# `dsh.profile.bundles` layer list because package.json declares
+# `dsh.bundle.patch`. Applied as a layer over dsh-base and dsh-web-app.
+#
+# WHAT THIS DOES NOT TOUCH
+#
+# There is no `- id: webserver` row here, and there must never be one. A patch
+# replaces the targeted row's whole `config`, so a row naming `webserver` would
+# silently restate — and therefore override — the operator's `host` and `port`.
+# The bridge reads dsh's bind through `ctx.webServer` instead. That is the
+# mechanical guarantee behind "starts alongside `dsh web` without changing dsh
+# bind settings": this file has no row that could change it.
+#
+# INTEGRATION-TESTED. The format and the `insert` semantics were read from the
+# upstream source at the audited revision, then confirmed against a live
+# `dsh web` at upstream `47f9438` on 2026-08-16: this overlay composed the
+# `mobile-bridge` row into the profile tree and the bridge started and connected.
+# Reproduce with `plugins/dsh-bridge/scripts/integration-test`. Point-in-time
+# against one revision; re-run when upstream moves.
+
+- insert:
+    - id: mobile-bridge
+      name: '@deepseek-ai/dsh-mobile-bridge'
+      config:
+        # Anchored to DSH_HOME so the bridge's identity, device registry, and
+        # audit log live beside the rest of the harness's state rather than in
+        # whatever directory the server happened to be launched from.
+        stateDir: !!js process.env.DSH_MOBILE_BRIDGE_STATE_DIR ?? `${process.env.DSH_HOME ?? `${process.env.HOME}/.dsh`}/mobile-bridge`
+
+        # Loopback by default. Serving a phone requires 0.0.0.0, which is an
+        # explicit operator decision: it puts an authenticated, policy-gated
+        # surface on the LAN. It is still not a public-internet posture.
+        host: !!js process.env.DSH_MOBILE_BRIDGE_HOST ?? '127.0.0.1'
+        port: !!js Number(process.env.DSH_MOBILE_BRIDGE_PORT ?? 8765)
+
+        # Unset means LAN-only. A relay is required only to reach the
+        # workstation from outside the LAN, and it is treated as hostile: it
+        # forwards sealed records and never holds a key.
+        relayUrl: !!js process.env.DSH_MOBILE_BRIDGE_RELAY
+
+        # Loopback port for the operator management panel. The panel binds
+        # 127.0.0.1 ALWAYS, independent of `host` above: it is a privileged
+        # control surface (mints access, revokes devices, opens pairing) and must
+        # never ride a listener exposed to the LAN. `0` disables it.
+        panelPort: !!js Number(process.env.DSH_MOBILE_BRIDGE_PANEL_PORT ?? 8766)

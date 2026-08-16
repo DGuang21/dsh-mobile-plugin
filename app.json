@@ -1,0 +1,29 @@
+{
+  "expo": {
+    "name": "DeepSeek Harness Mobile",
+    "slug": "deepseek-harness-mobile",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "dshmobile",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "ai.dsh.mobile"
+    },
+    "android": {
+      "package": "ai.dsh.mobile"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      "expo-asset",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow DeepSeek Harness Mobile to scan workstation pairing codes."
+        }
+      ]
+    ]
+  }
+}

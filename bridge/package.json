@@ -1,0 +1,8 @@
+{
+  "name": "dsh-mobile-bridge",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "//": "Node-side workstation bridge. Marked ESM so `node --experimental-strip-types` can run the .ts sources directly with no build step. Never imported by the React Native app; see bridge/tsconfig.json.",
+  "bin": { "dsh-mobile-bridge": "./src/cli.ts" }
+}
