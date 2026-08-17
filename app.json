@@ -6,7 +6,6 @@
     "orientation": "portrait",
     "scheme": "dshmobile",
     "userInterfaceStyle": "dark",
-    "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "ai.dsh.mobile"
@@ -23,7 +22,8 @@
         {
           "cameraPermission": "Allow DeepSeek Harness Mobile to scan workstation pairing codes."
         }
-      ]
+      ],
+      "expo-font"
     ]
   }
 }

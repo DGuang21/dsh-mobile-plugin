@@ -94,7 +94,7 @@ function useDshState() {
   const approvals = useRef(new Map<string, ApprovalRequest[]>());
   const questions = useRef(new Map<string, QuestionRequest[]>());
   /** Read by the resync handler, which must see the live client, not a closure copy. */
-  const clientRef = useRef<M1Client>();
+  const clientRef = useRef<M1Client | undefined>(undefined);
 
   const pushActivity = useCallback((item: Omit<ActivityItem, 'time'>) => {
     setActivity((current) => [{ ...item, time: new Date().toISOString() }, ...current].slice(0, 80));

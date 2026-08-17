@@ -262,7 +262,7 @@ describe('bridge end to end', () => {
     let closeReason = '';
     const key = randomBytes(16).toString('base64');
     const socket = tlsConnect({ host: '127.0.0.1', port, rejectUnauthorized: false });
-    let buffer = Buffer.alloc(0);
+    let buffer: Buffer<ArrayBufferLike> = Buffer.alloc(0);
     let ws: ClientWebSocket | undefined;
 
     await new Promise<void>((resolve, reject) => {

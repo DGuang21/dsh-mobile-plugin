@@ -163,7 +163,7 @@ export class LocalBridgeBackend implements TunnelBackend {
           : { host: this.target.host ?? '127.0.0.1', port: this.target.port },
       );
       let settled = false;
-      let buffer = Buffer.alloc(0);
+      let buffer: Buffer<ArrayBufferLike> = Buffer.alloc(0);
 
       const fail = (status: number, reason: string): void => {
         if (settled) return;
